@@ -1,17 +1,8 @@
 services:
   iptv:
+    build: .
     image: iptv:latest
-
     container_name: iptv
-
     restart: unless-stopped
-
-    ports:
-      - "5678:80"
-
     volumes:
-      # 整个项目映射进去
-      - /Users/wuxiaohua/work/codes/iptv:/opt/iptv
-
-      # 告诉 nginx 使用项目里的配置文件
-      - /Users/wuxiaohua/work/codes/iptv/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./data:/opt/iptv/data

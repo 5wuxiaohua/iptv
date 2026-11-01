@@ -1,5 +1,8 @@
-FROM nginx:alpine
+FROM python:3.13-alpine
 
-RUN apk add --no-cache python3 ca-certificates
+WORKDIR /opt/iptv
+
+COPY iptv_updater.py entrypoint.sh ./
+RUN chmod +x entrypoint.sh
 
 ENTRYPOINT ["/opt/iptv/entrypoint.sh"]
