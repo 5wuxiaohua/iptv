@@ -24,6 +24,15 @@ class PlaylistTests(unittest.TestCase):
         download.assert_called_once_with(manager.BASE_URL + '/beijing/mobile.txt')
 
     @patch('playlist_manager.today', return_value=date(2026, 11, 26))
+    @patch('playlist_manager.download_txt', return_value='央视,#genre#\nCCTV1,http://example.com/live\n')
+    def test_shanxi_input(self, download, _today):
+        for province in ('shanxi', 'Shanxi', ' shanxi '):
+            with self.subTest(province=province):
+                target = manager.generate(self.root, province, 'mobile', 'user', '2026-12-31')
+                self.assertEqual(target.parent.name, 'shanxi-mobile-user-2026-12-31')
+                self.assertEqual(download.call_args.args[0], manager.BASE_URL + '/shanxi/mobile.txt')
+
+    @patch('playlist_manager.today', return_value=date(2026, 11, 26))
     @patch('playlist_manager.download_txt')
     def test_invalid_input_never_downloads(self, download, _today):
         for province, operator, username, expires in [

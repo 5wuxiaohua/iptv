@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       province:
-        description: '省份上游目录名，例如 beijing、shanxi'
+        description: '省份拼音，例如 shanxi（山西）、beijing（北京），自动转为小写'
         required: true
         type: string
       operator:

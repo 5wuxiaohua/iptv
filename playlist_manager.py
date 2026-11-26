@@ -27,6 +27,7 @@ def parse_date(value):
 
 
 def generate(data_dir, province, operator, username, expires):
+    province = province.strip().lower()
     if not re.fullmatch(r'[a-z]+', province):
         raise ValueError('省份必须为上游目录的小写拼音，例如 beijing、shanxi')
     if operator not in OPERATORS:

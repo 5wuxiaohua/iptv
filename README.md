@@ -48,7 +48,7 @@ data/省份-运营商-用户名-失效日期/playlist.m3u
 
 | 参数 | 含义 | 示例 |
 | --- | --- | --- |
-| `province` | 上游省份目录名，仅支持小写英文字母 | `beijing`、`shanxi` |
+| `province` | 上游省份目录名，自动去除首尾空格并转为小写英文字母 | `beijing`、`shanxi` |
 | `operator` | 移动 `mobile`、联通 `unicom`、电信 `telecom` | `mobile` |
 | `username` | 用户名，仅支持英文字母、数字、下划线 | `zhangsan` |
 | `expires` | 失效日期，格式为 `YYYY-MM-DD`，必须晚于北京时间今天 | `2026-12-31` |
