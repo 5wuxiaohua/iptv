@@ -1,87 +1,99 @@
-# IPTV playlists with GitHub Actions and Pages
+# IPTV
 
-通过 GitHub Actions 按省份、运营商、用户名、失效日期生成 M3U，发布到 GitHub Pages；每天北京时间 00:00 清理到期目录并重新发布。
-Python 仅使用标准库，无需常驻服务器或 Docker。
+使用 GitHub Actions 生成 M3U 播放列表，通过 GitHub Pages 提供访问链接，并自动删除到期的用户目录。
 
-## 首次配置
+## 实现流程
 
-1. 将代码提交到 GitHub 仓库的默认分支。
-2. 在 **Settings → Pages → Build and deployment → Source** 选择 **GitHub Actions**。
-3. 允许 Actions 使用 `contents: write`、`pages: write`、`id-token: write` 权限。工作流会提交 `data/` 的变动；如果默认分支保护规则禁止 Actions 直接推送，需要调整对应规则。
-4. 在 **Actions → Generate IPTV playlist → Run workflow** 填入参数，选择默认分支运行。
+### 生成和发布
 
-代码在本地修改后不会自动上传；需要自行提交、推送。只有默认分支允许执行这两个工作流。
+手动运行 `Generate IPTV playlist`，传入省份、运营商、用户名和失效日期。
 
-## 生成播放列表
-
-| 参数 | 格式 | 示例 |
-| --- | --- | --- |
-| `province` | 上游 `Unicast/` 下的省份目录名，小写拼音 | `beijing`、`shanxi` |
-| `operator` | `mobile`（移动）、`unicom`（联通）、`telecom`（电信） | `mobile` |
-| `username` | 英文字母、数字、下划线 | `zhangsan` |
-| `expires` | `YYYY-MM-DD`，必须晚于北京时间今天 | `2026-12-31` |
-
-数据源按以下格式构造，是否可用取决于上游是否存在对应文件：
+Action 使用 Python 下载对应的 TXT 播放列表：
 
 ```text
-https://raw.githubusercontent.com/xisohi/CHINA-IPTV/main/Unicast/{province}/{operator}.txt
+https://raw.githubusercontent.com/xisohi/CHINA-IPTV/main/Unicast/{省份}/{运营商}.txt
 ```
 
-例如上述参数会生成：
+程序将 TXT 转换为 M3U，保留频道分组和多个播放地址，保存到：
+
+```text
+data/省份-运营商-用户名-失效日期/playlist.m3u
+```
+
+生成后清理到期目录，将数据变更提交到仓库默认分支，再把 `data/` 的内容部署到 Pages 站点根目录。
+
+### 自动清理
+
+`Clean expired IPTV playlists` 每天北京时间 **00:00** 自动运行。
+
+程序识别用户目录中的失效日期，删除日期小于或等于当天的目录，再提交变更并重新发布 Pages。这样也能补清之前漏跑任务留下的过期目录。
+
+例如：失效日期为 `2026-12-31`，表示从北京时间 12 月 31 日 00:00 开始失效。如果希望当天全天有效，应填写 `2027-01-01`。
+
+## 使用方法
+
+### 1. 配置仓库
+
+将项目推送到 GitHub 默认分支，然后配置：
+
+- **Settings → Actions → General**：启用 Actions，允许工作流申请仓库写入权限。
+- **Settings → Pages → Build and deployment → Source**：选择 **GitHub Actions**。
+- 如默认分支有保护规则，确保工作流可以推送数据变更。
+
+工作流已声明 `contents: write`、`pages: write` 和 `id-token: write` 权限，分别用于数据提交和 Pages 发布。
+
+### 2. 生成播放列表
+
+进入 **Actions → Generate IPTV playlist → Run workflow**，选择默认分支，填写参数：
+
+| 参数 | 含义 | 示例 |
+| --- | --- | --- |
+| `province` | 上游省份目录名，仅支持小写英文字母 | `beijing`、`shanxi` |
+| `operator` | 移动 `mobile`、联通 `unicom`、电信 `telecom` | `mobile` |
+| `username` | 用户名，仅支持英文字母、数字、下划线 | `zhangsan` |
+| `expires` | 失效日期，格式为 `YYYY-MM-DD`，必须晚于北京时间今天 | `2026-12-31` |
+
+上游必须存在对应省份和运营商的 TXT 文件。
+
+点击运行，等待生成和部署步骤全部完成。上述示例生成的文件是：
 
 ```text
 data/beijing-mobile-zhangsan-2026-12-31/playlist.m3u
 ```
 
-发布时将 `data/` 的内容作为站点根目录，播放地址为：
+### 3. 使用播放链接
+
+当前工作流将 `data/` 的内容发布到站点根目录，因此链接格式为：
 
 ```text
-https://<GitHub用户名>.github.io/<仓库名>/beijing-mobile-zhangsan-2026-12-31/playlist.m3u
+https://<GitHub用户名>.github.io/<仓库名>/省份-运营商-用户名-失效日期/playlist.m3u
 ```
 
-使用自定义域名或用户主页仓库时，以 Pages 实际站点地址为准。工作流部署步骤会显示站点地址。
-同一组参数再次运行会更新原文件；修改日期会创建新目录，旧目录保留到原日期到期。
-生成后不会自动刷新用户播放列表内容，需要再次运行生成工作流。
+本仓库示例：
 
-## 到期清理
-
-`Clean expired IPTV playlists` 工作流支持定时和手动运行。
-
-- `0 16 * * *` 使用 UTC，等于北京时间次日 00:00。
-- 失效日期表示**该日期开始时失效**。`2026-12-31` 将在北京时间 12 月 31 日 00:00 的任务中清理；如需当天全天有效，应填 `2027-01-01`。
-- 删除日期小于或等于执行当天的匹配目录，补清漏跑任务遗留的过期数据。
-- 仅处理 `省份-运营商-用户名-YYYY-MM-DD` 格式的直接子目录，不跟随符号链接，不处理历史根目录 M3U/SHA256 文件。
-- 删除后提交仓库，并重新部署整个 Pages 站点；只删除仓库文件不足以更新已发布的站点。
-- 两个工作流共用串行并发组，避免互相覆盖数据和部署。GitHub 默认并发队列可能替换较早的待运行任务，批量触发时请检查每次运行结果。
-
-GitHub 定时任务可能延迟、漏跑；公开仓库长期无活动时定时工作流也可能被自动停用。失效时间不是严格的访问截止时间，还受部署和缓存影响。
-
-## 访问范围与边界
-
-用户名只是目录标识，公开 Pages 不提供用户登录和鉴权，持有链接的人均可下载。
-不要在用户名中使用敏感信息。到期删除无法撤回已下载的 M3U，也无法禁止用户继续访问其中的原始直播 URL；提交历史仍可能保留旧播放列表。
-本工具不代理直播、不检测可播放性。播放器仍需具备访问直播源的网络条件，例如 IPv6 或对应运营商网络。
-当前 `data/` 中原有的北京、山西 M3U 和 SHA256 也会随站点发布，不受用户目录到期规则管理。
-
-## 本地使用与验证
-
-```bash
-python3 playlist_manager.py generate --province beijing --operator mobile --username zhangsan --expires 2026-12-31
-python3 playlist_manager.py cleanup
-python3 -m unittest discover -s tests -v
+```text
+https://5wuxiaohua.github.io/iptv/beijing-mobile-zhangsan-2026-12-31/playlist.m3u
 ```
 
-可在子命令前加 `--data-dir /path/to/data` 指定数据目录。
-下载或转换失败时不会覆盖已有 M3U；转换保留分组和重复频道的不同地址，使用临时文件原子替换。
+**链接不包含 `/data/`。** 将完整链接填入支持 M3U 网络播放列表的播放器。
 
-## 文件说明
+### 4. 更新或续期
 
-| 文件 | 用途 |
-| --- | --- |
-| `playlist_manager.py` | 单次生成、参数校验和到期清理 |
-| `iptv_updater.py` | 复用下载、转换和原子写入函数；保留原 Docker 定时更新入口 |
-| `.github/workflows/generate-playlist.yml` | 手动生成、提交、发布 |
-| `.github/workflows/cleanup-playlists.yml` | 定时或手动清理、提交、发布 |
-| `tests/test_playlist_manager.py` | 离线验证生成、校验、失败保留和清理边界 |
+- 使用相同参数再次生成：更新列表内容，链接不变。
+- 修改失效日期重新生成：创建新目录和新链接，需将新链接发给用户；原目录按原日期到期清理。
 
-原 Docker 方式仍可通过 `docker compose up -d --build` 运行，仅更新根目录的山西、北京移动列表，不执行新的用户目录管理。`nginx/default.conf` 是未启用的旧配置。
+当前仅在手动生成时下载上游内容，不会每天自动刷新列表。
+
+### 5. 手动清理
+
+进入 **Actions → Clean expired IPTV playlists → Run workflow**，选择默认分支运行，无需参数。
+
+任务会立即删除到期目录并重新发布 Pages。日常自动清理无需手动操作。
+
+## 注意事项
+
+- 在 Actions 运行记录中查看生成路径、删除记录和部署结果。数据已提交但发布失败时，可以修复配置后运行清理 Action 重新发布。
+- 用户目录只是独立链接，没有用户鉴权；知道完整链接的人均可访问。
+- 到期删除无法撤回已下载的列表，也不能使原始直播地址失效。
+- 定时任务和 Pages 发布可能延迟，不保证零点准时停止访问。
+- 本项目不代理视频流、不检测直播地址可用性，播放器需能直接访问直播源。

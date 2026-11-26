@@ -1,25 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+"""Shared download, M3U conversion and atomic file writing helpers."""
 
-import hashlib
 import os
 import time
 import urllib.request
 
 
-# ============================================================
-# 配置
-# ============================================================
-
-SOURCES = (
-    {"id": "shanxi_mobile", "name": "山西移动", "region": "shanxi"},
-    {"id": "beijing_mobile", "name": "北京移动", "region": "beijing"},
-)
-
-DATA_DIR = "/opt/iptv/data"
-
-# 每24小时检查一次
-CHECK_INTERVAL = 24 * 60 * 60
 DOWNLOAD_TIMEOUT = 30
 
 # ============================================================
@@ -65,38 +52,6 @@ def download_txt(url):
 
     return data.decode("utf-8-sig")
 
-
-# ============================================================
-# SHA256
-# ============================================================
-def calculate_sha256(text):
-    text = (
-        text
-        .replace("\r\n", "\n")
-        .replace("\r", "\n")
-    )
-
-    return hashlib.sha256(
-        text.encode("utf-8")
-    ).hexdigest()
-
-def read_old_hash(hash_file):
-    if not os.path.exists(hash_file):
-        return None
-
-    try:
-        with open(
-            hash_file,
-            "r",
-            encoding="utf-8"
-        ) as f:
-            return f.read().strip()
-
-    except Exception as e:
-        log(
-            "读取HASH失败：{}".format(e)
-        )
-        return None
 
 # ============================================================
 # TXT -> M3U
@@ -224,166 +179,3 @@ def atomic_write(filename, content):
             pass
 
         raise
-
-
-# ============================================================
-# 更新
-# ============================================================
-
-def update(source):
-    url = (
-        "https://raw.githubusercontent.com/xisohi/CHINA-IPTV/"
-        "main/Unicast/{}/mobile.txt".format(source["region"])
-    )
-    m3u_file = os.path.join(DATA_DIR, source["id"] + ".m3u")
-    hash_file = os.path.join(DATA_DIR, source["id"] + ".sha256")
-
-    log(
-        "========================================"
-    )
-    log(
-        "开始检查 IPTV 源：{}".format(source["name"])
-    )
-    # --------------------------------------------------------
-    # 下载
-    # --------------------------------------------------------
-
-    try:
-        txt = download_txt(url)
-
-    except Exception as e:
-        log(
-            "下载失败：{}".format(e)
-        )
-        log(
-            "保留当前M3U"
-        )
-        return False
-
-    # --------------------------------------------------------
-    # HASH
-    # --------------------------------------------------------
-
-    new_hash = calculate_sha256(txt)
-    old_hash = read_old_hash(hash_file)
-    log(
-        "远端SHA256：{}".format(
-            new_hash
-        )
-    )
-
-    if old_hash:
-        log(
-            "本地SHA256：{}".format(
-                old_hash
-            )
-        )
-    # --------------------------------------------------------
-    # 没变化
-    # --------------------------------------------------------
-    if (
-        old_hash == new_hash
-        and
-        os.path.exists(m3u_file)
-    ):
-        log(
-            "TXT没有变化，不更新"
-        )
-        return False
-
-    # --------------------------------------------------------
-    # 转换
-    # --------------------------------------------------------
-
-    log(
-        "检测到变化，开始生成M3U"
-    )
-
-    try:
-        m3u = txt_to_m3u(txt)
-    except Exception as e:
-        log(
-            "转换失败：{}".format(e)
-        )
-        log(
-            "保留当前M3U"
-        )
-        return False
-
-    # --------------------------------------------------------
-    # 更新M3U
-    # --------------------------------------------------------
-
-    try:
-        atomic_write(
-            m3u_file,
-            m3u
-        )
-
-    except Exception as e:
-        log(
-            "M3U更新失败：{}".format(e)
-        )
-        return False
-
-    # --------------------------------------------------------
-    # M3U成功以后再更新HASH
-    # --------------------------------------------------------
-
-    try:
-        atomic_write(
-            hash_file,
-            new_hash + "\n"
-        )
-
-    except Exception as e:
-        log(
-            "HASH更新失败：{}".format(e)
-        )
-    log(
-        "M3U更新成功：{}".format(
-            m3u_file
-        )
-    )
-
-    return True
-
-# ============================================================
-# Main
-# ============================================================
-
-def main():
-    log(
-        "========================================"
-    )
-    log(
-        " IPTV Updater"
-    )
-    log(
-        "========================================"
-    )
-
-    os.makedirs(
-        DATA_DIR,
-        exist_ok=True
-    )
-
-    while True:
-        # 容器启动后立即更新一次
-        for source in SOURCES:
-            try:
-                update(source)
-            except Exception as e:
-                log(
-                    "{}更新异常：{}".format(source["name"], e)
-                )
-        log(
-            "下一次检查：24小时后"
-        )
-
-        time.sleep(
-            CHECK_INTERVAL
-        )
-
-if __name__ == "__main__":
-    main()

@@ -1,8 +1,0 @@
-services:
-  iptv:
-    build: .
-    image: iptv:latest
-    container_name: iptv
-    restart: unless-stopped
-    volumes:
-      - ./data:/opt/iptv/data
