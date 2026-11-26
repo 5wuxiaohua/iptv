@@ -1,0 +1,83 @@
+name: Generate IPTV playlist
+on:
+  workflow_dispatch:
+    inputs:
+      province:
+        description: '省份上游目录名，例如 beijing、shanxi'
+        required: true
+        type: string
+      operator:
+        description: '运营商（移动 mobile、联通 unicom、电信 telecom）'
+        required: true
+        type: choice
+        options:
+          - mobile
+          - unicom
+          - telecom
+      username:
+        description: '用户名：字母、数字、下划线'
+        required: true
+        type: string
+      expires:
+        description: '失效日期 YYYY-MM-DD，当天北京时间 00:00 失效'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+# Serialize both workflows, including checkout, commit and deployment.
+concurrency:
+  group: iptv-data-and-pages
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    if: github.ref_name == github.event.repository.default_branch
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Generate playlist
+        env:
+          PROVINCE: ${{ inputs.province }}
+          OPERATOR: ${{ inputs.operator }}
+          USERNAME: ${{ inputs.username }}
+          EXPIRES: ${{ inputs.expires }}
+        run: >-
+          python playlist_manager.py generate
+          --province "$PROVINCE" --operator "$OPERATOR"
+          --username "$USERNAME" --expires "$EXPIRES"
+      - name: Remove expired playlists before publishing
+        run: python playlist_manager.py cleanup
+      - name: Save generated data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- data
+          if ! git diff --cached --quiet; then
+            git commit -m "Update IPTV playlists"
+            git push origin "HEAD:${{ github.event.repository.default_branch }}"
+          fi
+      - name: Prepare Pages files
+        run: |
+          mkdir -p _site
+          cp -a data/. _site/
+          touch _site/.nojekyll
+          printf '%s\n' '<!doctype html><meta charset="utf-8"><title>IPTV</title><p>请使用完整的播放列表链接。</p>' > _site/index.html
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
